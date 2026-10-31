@@ -129,8 +129,12 @@ body{
 .tools{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;align-items:center;font-size:13px;min-height:30px;max-width:320px}
 .tools button,.tools label{position:relative;font:inherit;color:var(--cream);background:none;border:1px solid rgba(251,233,208,.5);border-radius:999px;padding:5px 12px;cursor:pointer}
 .tools button:focus-visible,.tools label:focus-within{outline:2px solid var(--gold);outline-offset:2px}
-.tools input{position:absolute;opacity:0;width:1px;height:1px;inset:0}
-#pickName{opacity:.75;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.piece.pop{animation:pop var(--d) linear forwards}
+@keyframes pop{
+  0%{transform:translate(0,0) rotate(0);animation-timing-function:cubic-bezier(.1,.7,.3,1)}
+  35%{transform:translate(var(--px),var(--py)) rotate(var(--r1));animation-timing-function:cubic-bezier(.45,0,.85,.6)}
+  100%{transform:translate(var(--fx),var(--fy)) rotate(var(--r))}
+}
 @media (max-width:340px){.scene{transform:scale(.85)}}
 @media (prefers-reduced-motion:reduce){
   .gift{animation:none}.scene:not(.open)~.hint{animation:none}
@@ -164,11 +168,7 @@ body{
     </div>
   </div>
   <p class="hint" id="hint" aria-live="polite">tap the gift to open it</p>
-  <div class="tools">
-    <button type="button" id="again" hidden>wrap it again</button>
-    <label>choose music file<input type="file" id="pick" accept="audio/*"></label>
-    <span id="pickName"></span>
-  </div>
+
 </div>
 
 <script>
@@ -194,16 +194,52 @@ body{
     }
   }
 
-  var candles=[].slice.call(document.querySelectorAll('.candle')),
-      again=document.getElementById('again'), pick=document.getElementById('pick'),
-      pickName=document.getElementById('pickName'), song=null, lit=false, timer=null, ac=null;
+  var count=0, rainT=null, rainStart=null;
+  function piece(cls,left,top,vars,dur,i,delay){
+    var p=document.createElement('i');
+    p.className='piece '+cls;
+    p.style.left=left+'px'; p.style.top=top+'px';
+    p.style.background=colors[i%colors.length];
+    p.style.animationDelay=(delay||0)+'s';
+    for(var k in vars) p.style.setProperty(k,vars[k]);
+    p.style.setProperty('--d',dur+'s');
+    p.addEventListener('animationend',function(){p.remove();count--;});
+    document.body.appendChild(p); count++;
+  }
+  function sidePop(){
+    if(calm) return;
+    var h=window.innerHeight, w=window.innerWidth;
+    [1,-1].forEach(function(side){
+      for(var i=0;i<30;i++){
+        var px=side*(70+Math.random()*Math.min(230,w*.45));
+        piece('pop',side>0?-6:w-3,h*.62,{
+          '--px':px+'px','--py':-(160+Math.random()*Math.min(300,h*.4))+'px',
+          '--fx':(px*1.35+(Math.random()*60-30))+'px','--fy':(h*.5)+'px',
+          '--r1':(Math.random()*360)+'deg','--r':(Math.random()*900-450)+'deg'
+        },2.3+Math.random()*1,i+(side>0?0:2),Math.random()*.15);
+      }
+    });
+  }
+  function startRain(){
+    if(calm) return;
+    clearInterval(rainT);
+    rainT=setInterval(function(){
+      if(document.hidden||count>150) return;
+      for(var j=0;j<2;j++){
+        piece('rain',Math.random()*window.innerWidth,-20,{
+          '--x':(Math.random()*120-60)+'px','--r':(Math.random()*900-450)+'deg'
+        },4+Math.random()*3,Math.floor(Math.random()*6),0);
+      }
+    },170);
+  }
+  function stopRain(){
+    clearTimeout(rainStart); clearInterval(rainT);
+    [].slice.call(document.querySelectorAll('.piece')).forEach(function(p){p.remove();});
+    count=0;
+  }
 
-  pick.addEventListener('change',function(){
-    var f=pick.files&&pick.files[0]; if(!f) return;
-    if(song) song.pause();
-    try{ song=new Audio(URL.createObjectURL(f)); song.preload='auto'; pickName.textContent=f.name; }
-    catch(e){ song=null; pickName.textContent='could not load that file'; }
-  });
+  var candles=[].slice.call(document.querySelectorAll('.candle')),
+      lit=false, timer=null, ac=null;
 
   function chime(){
     try{
@@ -221,7 +257,6 @@ body{
   function celebrate(){
     hint.textContent='make a wish, roseannn!';
     confetti();
-    if(song){ song.currentTime=0; var p=song.play(); if(p&&p.catch) p.catch(chime); } else chime();
   }
 
   function blow(c){
@@ -241,8 +276,10 @@ body{
     if(scene.classList.contains('open')) return;
     scene.classList.add('open'); scene.setAttribute('aria-label','Birthday cake');
     hint.textContent='blow out the candles: tap each one';
-    again.hidden=false;
+    chime();
     setTimeout(confetti,750);
+    setTimeout(sidePop,900);
+    rainStart=setTimeout(startRain,1600);
     timer=setTimeout(function(){lit=true;},2400);
   }
   scene.addEventListener('click',openGift);
@@ -250,13 +287,7 @@ body{
     if(e.target===scene&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openGift();}
   });
 
-  again.addEventListener('click',function(){
-    clearTimeout(timer); lit=false;
-    if(song) song.pause();
-    candles.forEach(function(c){c.classList.remove('out'); var s=c.querySelector('.smoke'); if(s) s.remove();});
-    scene.classList.remove('open'); scene.setAttribute('aria-label','Birthday gift. Tap to open.');
-    hint.textContent='tap the gift to open it'; again.hidden=true;
-  });
+
 })();
 </script>
 </body>
